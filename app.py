@@ -4,6 +4,9 @@ import json
 import io
 from persona_engine import load_personas, run_simulation, save_state, auto_run_news_simulation
 
+st.set_page_config(page_title="Prometheus Simulation", layout="centered")
+st.title("🧠 Prometheus: Generational AI Persona Simulator")
+
 # --- SIDEBAR CONTROLS FOR TWEAKING BEHAVIOR ---
 st.sidebar.header("🛠️ Simulation Controls")
 trust_step = st.sidebar.slider(
@@ -15,10 +18,6 @@ ideology_chance = st.sidebar.slider(
     min_value=0, max_value=100, value=10, step=1
 )
 
-st.set_page_config(page_title="Prometheus Simulation", layout="centered")
-st.title("🧠 Prometheus: Generational AI Persona Simulator")
-
-# --- AUTO-RUN BUTTON ---
 if st.button("📰 Auto-Run from News Feeds"):
     auto_run_news_simulation(trust_step=trust_step, ideology_chance=ideology_chance)
     st.success("News simulation run completed and saved.")
@@ -32,7 +31,6 @@ if st.button("Run Simulation") and headline:
 
 personas = load_personas()
 
-# --- DOWNLOAD ALL LOGS BUTTON ---
 if st.button("⬇️ Download ALL Persona Logs (JSON)"):
     all_logs = {p['name']: p.get('belief_log', []) for p in personas}
     st.download_button(
@@ -64,13 +62,10 @@ for p in personas:
             df = pd.DataFrame(data)
             df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-            # Chart trust trend
             st.line_chart(df.set_index("timestamp")["trust"], height=150, use_container_width=True)
-            # Show ideology as a step (categorical)
             st.markdown("##### Ideology History:")
             st.write(df[["timestamp", "ideology"]].tail(20))
 
-            # Show last 20 memory entries in text
             for entry in reversed(mem[-20:]):
                 st.markdown(
                     f"**{entry['headline']}**\n\n"
@@ -80,11 +75,9 @@ for p in personas:
                 )
                 st.markdown("---")
 
-            # Download as JSON
             json_data = json.dumps(mem, indent=2)
             st.download_button("⬇️ Download Memory as JSON", json_data, file_name=f"{p['name']}_memory.json", mime="application/json")
 
-            # Download as CSV
             csv_buffer = io.StringIO()
             df.to_csv(csv_buffer, index=False)
             st.download_button("⬇️ Download Memory as CSV", csv_buffer.getvalue(), file_name=f"{p['name']}_memory.csv", mime="text/csv")
