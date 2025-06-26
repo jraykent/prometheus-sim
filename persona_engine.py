@@ -1,38 +1,45 @@
-from datetime import datetime
-
-# persona_engine.py — Prometheus Core Logic
-
-from datetime import datetime
 import json
 import os
+from datetime import datetime
+import random
 
-# ===== Persona Definitions (Age Range: 6–75) =====
-personas = [
-    {"name": "Lily", "age": 6, "media_habits": ["YouTube Kids"], "emotional_profile": "Curious, sensitive", "cognitive_traits": ["literal thinker"], "belief_log": []},
-    {"name": "Aiden", "age": 13, "media_habits": ["TikTok", "YouTube"], "emotional_profile": "Impressionable, reactive", "cognitive_traits": ["peer-influenced"], "belief_log": []},
-    {"name": "Chloe", "age": 18, "media_habits": ["Snapchat", "Instagram"], "emotional_profile": "Exploratory, values identity", "cognitive_traits": ["tribal alignment"], "belief_log": []},
-    {"name": "Noah", "age": 25, "media_habits": ["Reddit", "X/Twitter"], "emotional_profile": "Cynical, analytical", "cognitive_traits": ["confirmation-seeking"], "belief_log": []},
-    {"name": "Marcus", "age": 38, "media_habits": ["NPR", "X/Twitter"], "emotional_profile": "Stability-focused", "cognitive_traits": ["skeptical of trends"], "belief_log": []},
-    {"name": "Elaine", "age": 52, "media_habits": ["Facebook", "Fox News"], "emotional_profile": "Security-minded", "cognitive_traits": ["fears change"], "belief_log": []},
-    {"name": "Walter", "age": 75, "media_habits": ["TV news", "local paper"], "emotional_profile": "Traditionalist, routine-bound", "cognitive_traits": ["values consistency"], "belief_log": []}
-]
+PERSONA_FILE = "personas.json"
+LOG_DIR = "logs"
+STATE_FILE = os.path.join(LOG_DIR, "personas_state.json")
+LOG_FILE = os.path.join(LOG_DIR, "persona_log.json")
 
-# ===== Simulated Reaction Engine =====
+
+# Sample personas
+def load_personas():
+    return [
+        {"name": "Lily", "age": 6, "baseline_trust": 0.5},
+        {"name": "Aiden", "age": 13, "baseline_trust": 0.4},
+        {"name": "Chloe", "age": 18, "baseline_trust": 0.6},
+        {"name": "Noah", "age": 25, "baseline_trust": 0.7},
+        {"name": "Marcus", "age": 38, "baseline_trust": 0.8},
+        {"name": "Elaine", "age": 52, "baseline_trust": 0.65},
+        {"name": "Walter", "age": 75, "baseline_trust": 0.55},
+    ]
+
+
 def simulate_reaction(persona, headline):
-    age = persona["age"]
-    if age < 10:
+    age = persona['age']
+    name = persona['name']
+    base_trust = persona['baseline_trust']
+
+    if age <= 10:
         summary = "Doesn't understand it fully, feels uneasy."
         emotion = "confused/scared"
         trust = "low"
-    elif age < 20:
+    elif age <= 17:
         summary = "Feels personally affected, influenced by how others react."
         emotion = "anxious or excited"
         trust = "shifting"
-    elif age < 35:
+    elif age <= 30:
         summary = "Curious and reactive, split on trust."
         emotion = "mixed"
         trust = "medium"
-    elif age < 60:
+    elif age <= 60:
         summary = "Wants facts and context before reacting."
         emotion = "skeptical"
         trust = "moderate"
@@ -41,53 +48,44 @@ def simulate_reaction(persona, headline):
         emotion = "resigned or concerned"
         trust = "low to moderate"
 
-    response = {
+    return {
         "summary": summary,
         "emotion": emotion,
         "trust_level": trust,
-        "note": f"Responds based on age {age} persona filter."
+        "ideology": persona.get("ideology", "unknown"),
+        "note": f"{name} responded to: {headline}",
+        "timestamp": datetime.now().isoformat()
     }
 
-    persona["belief_log"].append({
-        "timestamp": datetime.now().isoformat(),
-        "headline": headline,
-        "reaction": response
-    })
-
-    return response
-
-# ===== Load & Save Functions =====
-def load_personas():
-    return personas
 
 def run_simulation(personas, headline):
     results = []
     for p in personas:
         reaction = simulate_reaction(p, headline)
-        results.append({"name": p["name"], "age": p["age"], "reaction": reaction})
+        p['reaction'] = reaction
+        results.append(p)
     return results
 
-def save_state():
-    os.makedirs("logs", exist_ok=True)
-    with open("logs/personas_state.json", "w") as f:
-        json.dump(personas, f, indent=2)
-import datetime
+
+def save_state(results=None):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    if results:
+        with open(STATE_FILE, "w") as f:
+            json.dump(results, f, indent=2)
+        with open(LOG_FILE, "a") as f:
+            for r in results:
+                json.dump(r, f)
+                f.write("\n")
+
 
 def auto_run_news_simulation():
-    trending_headlines = [
+    # Placeholder: Replace with real news scraping logic
+    headlines = [
         "Supreme Court strikes down federal ban on bump stocks",
-        "Congress passes sweeping immigration reform bill",
-        "Massive cyberattack disrupts U.S. infrastructure",
-        "NASA announces manned mission to Mars",
-        "Federal Reserve hikes interest rates to 7%"
+        "Major social media platform experiences global outage",
+        "Breakthrough in cancer treatment shows 90% success rate",
     ]
-
+    headline = random.choice(headlines)
     personas = load_personas()
-
-    for headline in trending_headlines:
-        print(f"Running simulation for: {headline}")
-        run_simulation(personas, headline)
-
-    save_state()
-    print(f"[{datetime.datetime.now()}] Auto-run simulation completed for trending headlines.")
-
+    results = run_simulation(personas, headline)
+    save_state(results)
