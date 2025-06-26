@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 import random
+import requests
 
 LOG_DIR = "logs"
 STATE_FILE = os.path.join(LOG_DIR, "personas_state.json")
@@ -135,15 +136,33 @@ def run_simulation(personas, headline):
     save_state(personas)
     return results
 
+# ----------- NEW: Live News and Reddit Feeds ------------
+
+def get_live_headlines():
+    api_key = "5407bb8bb38b433b8f9973bf024e2f61"
+    url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
+    resp = requests.get(url)
+    headlines = []
+    if resp.status_code == 200:
+        data = resp.json()
+        for article in data.get("articles", []):
+            headlines.append(article["title"])
+    return headlines[:10] if headlines else ["[NewsAPI ERROR]"]
+
+def get_reddit_headlines():
+    url = "https://www.reddit.com/r/news/top.json?limit=10&t=day"
+    headers = {'User-agent': 'PrometheusBot/0.1'}
+    resp = requests.get(url, headers=headers)
+    headlines = []
+    if resp.status_code == 200:
+        data = resp.json()
+        for post in data["data"]["children"]:
+            headlines.append(post["data"]["title"])
+    return headlines[:10] if headlines else ["[Reddit ERROR]"]
+
 def auto_run_news_simulation():
-    headlines = [
-        "Supreme Court strikes down federal ban on bump stocks",
-        "Major social media platform experiences global outage",
-        "Breakthrough in cancer treatment shows 90% success rate",
-        "US unemployment hits historic low",
-        "Severe storms cause flooding across Midwest"
-    ]
     personas = load_personas()
+    headlines = get_live_headlines() + get_reddit_headlines()
     for headline in headlines:
         run_simulation(personas, headline)
     save_state(personas)
