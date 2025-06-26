@@ -1,12 +1,11 @@
 import json
 import os
-from datetime import datetime
 import random
 import requests
+from datetime import datetime
 
 LOG_DIR = "logs"
 STATE_FILE = os.path.join(LOG_DIR, "personas_state.json")
-LOG_FILE = os.path.join(LOG_DIR, "persona_log.json")
 
 DEFAULT_PERSONAS = [
     {
@@ -74,38 +73,36 @@ def save_state(personas=None):
     with open(STATE_FILE, "w") as f:
         json.dump(personas, f, indent=2)
 
-def simulate_reaction(persona, headline):
-    # "Learn" slightly: trust drifts, belief log grows, possible ideology shift
-    reaction = {}
+def simulate_reaction(persona, headline, trust_step=0.01, ideology_chance=10):
     age = persona["age"]
     trust = persona.get("trust", 0.5)
 
+    # Use trust_step from Streamlit sidebar
     if age <= 10:
         summary = "Doesn't understand it fully, feels uneasy."
         emotion = "confused/scared"
-        trust_delta = -0.01
+        trust_delta = -trust_step
     elif age <= 17:
         summary = "Feels personally affected, influenced by how others react."
         emotion = "anxious or excited"
-        trust_delta = random.choice([-0.01, 0.01])
+        trust_delta = random.choice([-trust_step, trust_step])
     elif age <= 30:
         summary = "Curious and reactive, split on trust."
         emotion = "mixed"
-        trust_delta = 0.01
+        trust_delta = trust_step
     elif age <= 60:
         summary = "Wants facts and context before reacting."
         emotion = "skeptical"
-        trust_delta = -0.01
+        trust_delta = -trust_step
     else:
         summary = "Defaults to past experience and established media."
         emotion = "resigned or concerned"
-        trust_delta = -0.02
+        trust_delta = -2 * trust_step
 
-    # Evolve trust
     persona["trust"] = min(max(trust + trust_delta, 0), 1)
 
-    # Optional: simplistic ideology drift (random, but you can expand)
-    if random.random() < 0.1:  # 10% chance to shift
+    # Use ideology_chance from sidebar
+    if random.randint(1, 100) <= ideology_chance:
         persona["ideology"] = random.choice(
             ["liberal", "conservative", "centrist", "unknown"]
         )
@@ -119,7 +116,6 @@ def simulate_reaction(persona, headline):
         "timestamp": datetime.now().isoformat()
     }
 
-    # Save reaction in memory
     persona.setdefault("belief_log", []).append({
         "headline": headline,
         "reaction": reaction
@@ -127,17 +123,18 @@ def simulate_reaction(persona, headline):
 
     return reaction
 
-def run_simulation(personas, headline):
+def run_simulation(personas, headline, trust_step=0.01, ideology_chance=10):
     results = []
     for p in personas:
-        reaction = simulate_reaction(p, headline)
+        reaction = simulate_reaction(
+            p, headline, trust_step=trust_step, ideology_chance=ideology_chance
+        )
         p["reaction"] = reaction
         results.append(p)
     save_state(personas)
     return results
 
-# ----------- NEW: Live News and Reddit Feeds ------------
-
+# --- News API integration ---
 def get_live_headlines():
     api_key = "5407bb8bb38b433b8f9973bf024e2f61"
     url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
@@ -160,9 +157,9 @@ def get_reddit_headlines():
             headlines.append(post["data"]["title"])
     return headlines[:10] if headlines else ["[Reddit ERROR]"]
 
-def auto_run_news_simulation():
+def auto_run_news_simulation(trust_step=0.01, ideology_chance=10):
     personas = load_personas()
     headlines = get_live_headlines() + get_reddit_headlines()
     for headline in headlines:
-        run_simulation(personas, headline)
+        run_simulation(personas, headline, trust_step=trust_step, ideology_chance=ideology_chance)
     save_state(personas)
