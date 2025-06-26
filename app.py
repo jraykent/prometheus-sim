@@ -1,4 +1,7 @@
 import streamlit as st
+import pandas as pd
+import json
+import io
 from persona_engine import load_personas, run_simulation, save_state, auto_run_news_simulation
 
 st.set_page_config(page_title="Prometheus Simulation", layout="centered")
@@ -16,13 +19,37 @@ if st.button("Run Simulation") and headline:
     st.success("Simulation complete. Scroll down to see persona histories.")
 
 personas = load_personas()
-st.header("Persona Memory Logs")
+st.header("Persona Memory Logs & Trends")
+
 for p in personas:
     with st.expander(f"{p['name']} ({p['age']} yrs) — Ideology: {p.get('ideology', 'unknown')}"):
         st.markdown(f"**Current Trust:** `{p.get('trust', 'unknown')}`")
         st.markdown("#### Memory Timeline:")
+
+        # Build DataFrame from memory for plotting
         if p.get("belief_log"):
-            for entry in reversed(p["belief_log"][-20:]):  # Last 20 entries
+            mem = p["belief_log"]
+            data = []
+            for entry in mem:
+                reaction = entry["reaction"]
+                data.append({
+                    "timestamp": reaction["timestamp"],
+                    "trust": reaction.get("trust_level", None),
+                    "ideology": reaction.get("ideology", "unknown"),
+                    "emotion": reaction.get("emotion", "unknown"),
+                    "headline": entry["headline"]
+                })
+            df = pd.DataFrame(data)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+            # Chart trust trend
+            st.line_chart(df.set_index("timestamp")["trust"], height=150, use_container_width=True)
+            # Show ideology as a step (categorical)
+            st.markdown("##### Ideology History:")
+            st.write(df[["timestamp", "ideology"]].tail(20))
+
+            # Show last 20 memory entries in text
+            for entry in reversed(mem[-20:]):
                 st.markdown(
                     f"**{entry['headline']}**\n\n"
                     f"— *{entry['reaction']['timestamp']}*  \n"
@@ -30,6 +57,16 @@ for p in personas:
                     f"> {entry['reaction']['summary']}"
                 )
                 st.markdown("---")
+
+            # Download as JSON
+            json_data = json.dumps(mem, indent=2)
+            st.download_button("⬇️ Download Memory as JSON", json_data, file_name=f"{p['name']}_memory.json", mime="application/json")
+
+            # Download as CSV
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button("⬇️ Download Memory as CSV", csv_buffer.getvalue(), file_name=f"{p['name']}_memory.csv", mime="text/csv")
+
         else:
             st.caption("No memory yet. Run a simulation!")
 
