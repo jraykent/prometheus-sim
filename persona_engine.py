@@ -69,4 +69,23 @@ def save_state():
     os.makedirs("logs", exist_ok=True)
     with open("logs/personas_state.json", "w") as f:
         json.dump(personas, f, indent=2)
+import datetime
+
+def auto_run_news_simulation():
+    trending_headlines = [
+        "Supreme Court strikes down federal ban on bump stocks",
+        "Congress passes sweeping immigration reform bill",
+        "Massive cyberattack disrupts U.S. infrastructure",
+        "NASA announces manned mission to Mars",
+        "Federal Reserve hikes interest rates to 7%"
+    ]
+
+    personas = load_personas()
+
+    for headline in trending_headlines:
+        print(f"Running simulation for: {headline}")
+        run_simulation(personas, headline)
+
+    save_state()
+    print(f"[{datetime.datetime.now()}] Auto-run simulation completed for trending headlines.")
 
