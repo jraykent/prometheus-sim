@@ -3,89 +3,147 @@ import os
 from datetime import datetime
 import random
 
-PERSONA_FILE = "personas.json"
 LOG_DIR = "logs"
 STATE_FILE = os.path.join(LOG_DIR, "personas_state.json")
 LOG_FILE = os.path.join(LOG_DIR, "persona_log.json")
 
+DEFAULT_PERSONAS = [
+    {
+        "name": "Lily",
+        "age": 6,
+        "trust": 0.5,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Aiden",
+        "age": 13,
+        "trust": 0.4,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Chloe",
+        "age": 18,
+        "trust": 0.6,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Noah",
+        "age": 25,
+        "trust": 0.7,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Marcus",
+        "age": 38,
+        "trust": 0.8,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Elaine",
+        "age": 52,
+        "trust": 0.65,
+        "ideology": "unknown",
+        "belief_log": []
+    },
+    {
+        "name": "Walter",
+        "age": 75,
+        "trust": 0.55,
+        "ideology": "unknown",
+        "belief_log": []
+    }
+]
 
-# Sample personas
 def load_personas():
-    return [
-        {"name": "Lily", "age": 6, "baseline_trust": 0.5},
-        {"name": "Aiden", "age": 13, "baseline_trust": 0.4},
-        {"name": "Chloe", "age": 18, "baseline_trust": 0.6},
-        {"name": "Noah", "age": 25, "baseline_trust": 0.7},
-        {"name": "Marcus", "age": 38, "baseline_trust": 0.8},
-        {"name": "Elaine", "age": 52, "baseline_trust": 0.65},
-        {"name": "Walter", "age": 75, "baseline_trust": 0.55},
-    ]
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r") as f:
+            return json.load(f)
+    else:
+        return DEFAULT_PERSONAS.copy()
 
+def save_state(personas=None):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    if personas is None:
+        personas = load_personas()
+    with open(STATE_FILE, "w") as f:
+        json.dump(personas, f, indent=2)
 
 def simulate_reaction(persona, headline):
-    age = persona['age']
-    name = persona['name']
-    base_trust = persona['baseline_trust']
+    # "Learn" slightly: trust drifts, belief log grows, possible ideology shift
+    reaction = {}
+    age = persona["age"]
+    trust = persona.get("trust", 0.5)
 
     if age <= 10:
         summary = "Doesn't understand it fully, feels uneasy."
         emotion = "confused/scared"
-        trust = "low"
+        trust_delta = -0.01
     elif age <= 17:
         summary = "Feels personally affected, influenced by how others react."
         emotion = "anxious or excited"
-        trust = "shifting"
+        trust_delta = random.choice([-0.01, 0.01])
     elif age <= 30:
         summary = "Curious and reactive, split on trust."
         emotion = "mixed"
-        trust = "medium"
+        trust_delta = 0.01
     elif age <= 60:
         summary = "Wants facts and context before reacting."
         emotion = "skeptical"
-        trust = "moderate"
+        trust_delta = -0.01
     else:
         summary = "Defaults to past experience and established media."
         emotion = "resigned or concerned"
-        trust = "low to moderate"
+        trust_delta = -0.02
 
-    return {
+    # Evolve trust
+    persona["trust"] = min(max(trust + trust_delta, 0), 1)
+
+    # Optional: simplistic ideology drift (random, but you can expand)
+    if random.random() < 0.1:  # 10% chance to shift
+        persona["ideology"] = random.choice(
+            ["liberal", "conservative", "centrist", "unknown"]
+        )
+
+    reaction = {
         "summary": summary,
         "emotion": emotion,
-        "trust_level": trust,
+        "trust_level": round(persona["trust"], 2),
         "ideology": persona.get("ideology", "unknown"),
-        "note": f"{name} responded to: {headline}",
+        "note": f"{persona['name']} responded to: {headline}",
         "timestamp": datetime.now().isoformat()
     }
 
+    # Save reaction in memory
+    persona.setdefault("belief_log", []).append({
+        "headline": headline,
+        "reaction": reaction
+    })
+
+    return reaction
 
 def run_simulation(personas, headline):
     results = []
     for p in personas:
         reaction = simulate_reaction(p, headline)
-        p['reaction'] = reaction
+        p["reaction"] = reaction
         results.append(p)
+    save_state(personas)
     return results
 
-
-def save_state(results=None):
-    os.makedirs(LOG_DIR, exist_ok=True)
-    if results:
-        with open(STATE_FILE, "w") as f:
-            json.dump(results, f, indent=2)
-        with open(LOG_FILE, "a") as f:
-            for r in results:
-                json.dump(r, f)
-                f.write("\n")
-
-
 def auto_run_news_simulation():
-    # Placeholder: Replace with real news scraping logic
     headlines = [
         "Supreme Court strikes down federal ban on bump stocks",
         "Major social media platform experiences global outage",
         "Breakthrough in cancer treatment shows 90% success rate",
+        "US unemployment hits historic low",
+        "Severe storms cause flooding across Midwest"
     ]
-    headline = random.choice(headlines)
     personas = load_personas()
-    results = run_simulation(personas, headline)
-    save_state(results)
+    for headline in headlines:
+        run_simulation(personas, headline)
+    save_state(personas)
