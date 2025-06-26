@@ -1,68 +1,98 @@
-def simulate_reaction(persona, headline, trust_step=0.01, ideology_chance=10):
-    import random
-    from datetime import datetime
+import streamlit as st
+import pandas as pd
+import json
+import io
+from persona_engine import load_personas, run_simulation, save_state, auto_run_news_simulation
 
-    age = persona["age"]
-    trust = persona.get("trust", 0.5)
+# --- SIDEBAR CONTROLS FOR TWEAKING BEHAVIOR ---
+st.sidebar.header("🛠️ Simulation Controls")
+trust_step = st.sidebar.slider(
+    "Default trust change per headline",
+    min_value=-0.1, max_value=0.1, value=0.01, step=0.01
+)
+ideology_chance = st.sidebar.slider(
+    "Chance of ideology change (%)",
+    min_value=0, max_value=100, value=10, step=1
+)
 
-    # Example: use trust_step from sidebar, not hardcoded
-    if age <= 10:
-        summary = "Doesn't understand it fully, feels uneasy."
-        emotion = "confused/scared"
-        trust_delta = -trust_step
-    elif age <= 17:
-        summary = "Feels personally affected, influenced by how others react."
-        emotion = "anxious or excited"
-        trust_delta = random.choice([-trust_step, trust_step])
-    elif age <= 30:
-        summary = "Curious and reactive, split on trust."
-        emotion = "mixed"
-        trust_delta = trust_step
-    elif age <= 60:
-        summary = "Wants facts and context before reacting."
-        emotion = "skeptical"
-        trust_delta = -trust_step
-    else:
-        summary = "Defaults to past experience and established media."
-        emotion = "resigned or concerned"
-        trust_delta = -2 * trust_step
+st.set_page_config(page_title="Prometheus Simulation", layout="centered")
+st.title("🧠 Prometheus: Generational AI Persona Simulator")
 
-    persona["trust"] = min(max(trust + trust_delta, 0), 1)
+# --- AUTO-RUN BUTTON ---
+if st.button("📰 Auto-Run from News Feeds"):
+    auto_run_news_simulation(trust_step=trust_step, ideology_chance=ideology_chance)
+    st.success("News simulation run completed and saved.")
 
-    # Use ideology_chance from sidebar
-    if random.randint(1, 100) <= ideology_chance:
-        persona["ideology"] = random.choice(
-            ["liberal", "conservative", "centrist", "unknown"]
-        )
+headline = st.text_input("Enter a headline to simulate reactions:")
 
-    reaction = {
-        "summary": summary,
-        "emotion": emotion,
-        "trust_level": round(persona["trust"], 2),
-        "ideology": persona.get("ideology", "unknown"),
-        "note": f"{persona['name']} responded to: {headline}",
-        "timestamp": datetime.now().isoformat()
-    }
+if st.button("Run Simulation") and headline:
+    results = run_simulation(load_personas(), headline, trust_step=trust_step, ideology_chance=ideology_chance)
+    save_state(results)
+    st.success("Simulation complete. Scroll down to see persona histories.")
 
-    persona.setdefault("belief_log", []).append({
-        "headline": headline,
-        "reaction": reaction
-    })
+personas = load_personas()
 
-    return reaction
+# --- DOWNLOAD ALL LOGS BUTTON ---
+if st.button("⬇️ Download ALL Persona Logs (JSON)"):
+    all_logs = {p['name']: p.get('belief_log', []) for p in personas}
+    st.download_button(
+        "Download All Logs as JSON",
+        data=json.dumps(all_logs, indent=2),
+        file_name="all_persona_logs.json",
+        mime="application/json"
+    )
 
-def run_simulation(personas, headline, trust_step=0.01, ideology_chance=10):
-    results = []
-    for p in personas:
-        reaction = simulate_reaction(p, headline, trust_step=trust_step, ideology_chance=ideology_chance)
-        p["reaction"] = reaction
-        results.append(p)
-    save_state(personas)
-    return results
+st.header("Persona Memory Logs & Trends")
 
-def auto_run_news_simulation(trust_step=0.01, ideology_chance=10):
-    personas = load_personas()
-    headlines = get_live_headlines() + get_reddit_headlines()
-    for headline in headlines:
-        run_simulation(personas, headline, trust_step=trust_step, ideology_chance=ideology_chance)
-    save_state(personas)
+for p in personas:
+    with st.expander(f"{p['name']} ({p['age']} yrs) — Ideology: {p.get('ideology', 'unknown')}"):
+        st.markdown(f"**Current Trust:** `{p.get('trust', 'unknown')}`")
+        st.markdown("#### Memory Timeline:")
+
+        if p.get("belief_log"):
+            mem = p["belief_log"]
+            data = []
+            for entry in mem:
+                reaction = entry["reaction"]
+                data.append({
+                    "timestamp": reaction["timestamp"],
+                    "trust": reaction.get("trust_level", None),
+                    "ideology": reaction.get("ideology", "unknown"),
+                    "emotion": reaction.get("emotion", "unknown"),
+                    "headline": entry["headline"]
+                })
+            df = pd.DataFrame(data)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+            # Chart trust trend
+            st.line_chart(df.set_index("timestamp")["trust"], height=150, use_container_width=True)
+            # Show ideology as a step (categorical)
+            st.markdown("##### Ideology History:")
+            st.write(df[["timestamp", "ideology"]].tail(20))
+
+            # Show last 20 memory entries in text
+            for entry in reversed(mem[-20:]):
+                st.markdown(
+                    f"**{entry['headline']}**\n\n"
+                    f"— *{entry['reaction']['timestamp']}*  \n"
+                    f"Emotion: `{entry['reaction']['emotion']}` | Trust: `{entry['reaction']['trust_level']}` | Ideology: `{entry['reaction'].get('ideology', 'unknown')}`\n"
+                    f"> {entry['reaction']['summary']}"
+                )
+                st.markdown("---")
+
+            # Download as JSON
+            json_data = json.dumps(mem, indent=2)
+            st.download_button("⬇️ Download Memory as JSON", json_data, file_name=f"{p['name']}_memory.json", mime="application/json")
+
+            # Download as CSV
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button("⬇️ Download Memory as CSV", csv_buffer.getvalue(), file_name=f"{p['name']}_memory.csv", mime="text/csv")
+
+        else:
+            st.caption("No memory yet. Run a simulation!")
+
+if st.button("🔁 Reset Logs"):
+    import reset_logs
+    reset_logs.clear_logs()
+    st.warning("Persona logs reset.")
