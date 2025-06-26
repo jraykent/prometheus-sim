@@ -1,42 +1,36 @@
-# app.py — Prometheus Dashboard
+# app.py — Streamlit Frontend for Prometheus Simulation
 
 import streamlit as st
-from persona_engine import load_personas, run_simulation, save_state
-import json
-import os
+from persona_engine import load_personas, run_simulation, save_state, auto_run_news_simulation
 
-# Page configuration
-st.set_page_config(page_title="Prometheus AI Simulation", layout="centered")
-st.title("🧠 Prometheus Persona Engine")
-st.markdown("Enter a headline, tweet, or news summary to simulate persona reactions:")
+st.set_page_config(page_title="Prometheus Simulation", layout="wide")
 
-# Headline input
-headline = st.text_input("📰 Enter headline or content:")
+st.title("🧠 Prometheus: Media Reaction Simulator")
+st.caption("Understand how age-based personas respond to headlines")
 
-# Run simulation on button press
-if st.button("▶️ Run Simulation") and headline.strip():
-    try:
-        st.info("Running simulation...")
+# === Input for headline or news feed ===
+mode = st.radio("Choose simulation mode:", ["Manual headline", "Live news auto-run"])
+
+if mode == "Manual headline":
+    headline = st.text_input("Enter a headline:", value="Supreme Court strikes down federal ban on bump stocks")
+
+    if st.button("Run Simulation"):
         results = run_simulation(load_personas(), headline)
+        save_state()
 
+        st.subheader("Persona Reactions")
         for r in results:
-            st.subheader(f"{r['name']} (Age {r['age']})")
-            st.markdown(f"**📝 Summary:** {r['reaction'].get('summary', 'N/A')}**")
-            st.markdown(f"**😐 Emotion:** {r['reaction'].get('emotion', 'N/A')}**")
-            st.markdown(f"**🔒 Trust Level:** `{r['reaction'].get('trust_level', 'unknown')}`")
+            st.markdown(f"**🧍 {r['name']} ({r['age']})**")
             st.markdown(f"**🧭 Ideology:** `{r['reaction'].get('ideology', 'unknown')}`")
-            st.caption(f"📌 {r['reaction'].get('note', '')}")
+            st.markdown(f"**📊 Emotion:** `{r['reaction']['emotion']}`")
+            st.markdown(f"**📉 Trust Level:** `{r['reaction']['trust_level']}`")
+            st.caption(f"📝 {r['reaction']['summary']}")
+            st.caption(f"📌 {r['reaction']['note']}")
             st.markdown("---")
 
-    except Exception as e:
-        st.error(f"⚠️ An error occurred during simulation: {e}")
-
-# Optional: Save the updated belief states
-if st.button("💾 Save Persona State"):
-    try:
-        save_state()
-        st.success("✅ Persona states saved to logs/personas_state.json")
-    except Exception as e:
-        st.error(f"⚠️ Failed to save states: {e}")
+else:
+    st.warning("Running auto-news feed simulation...")
+    auto_run_news_simulation()
+    st.success("Auto-run complete. Persona state updated.")
 
 
