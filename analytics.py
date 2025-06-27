@@ -25,4 +25,3 @@ def logs_to_dataframe(personas):
     if frames:
         return pd.concat(frames, ignore_index=True)
     return pd.DataFrame()
-
