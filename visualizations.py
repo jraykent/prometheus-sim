@@ -6,9 +6,19 @@ def plot_ideology_drift(personas):
         if p.log:
             plt.plot([entry['ideology'] for entry in p.log], label=p.name)
     plt.xlabel("Event #")
-    plt.ylabel("Ideology")
+    plt.ylabel("Ideology (-1 = Left, 0 = Center, 1 = Right)")
     plt.title("Ideology Drift Over Time")
     plt.legend()
+    plt.tight_layout()
+    return plt
+
+def plot_ideology_histogram(personas):
+    values = [p.ideology for p in personas]
+    plt.figure(figsize=(7, 3))
+    plt.hist(values, bins=9, range=(-1, 1), edgecolor='k')
+    plt.xlabel("Ideology (-1 = Left, 1 = Right)")
+    plt.ylabel("Number of Personas")
+    plt.title("Current Political Spectrum")
     plt.tight_layout()
     return plt
 
