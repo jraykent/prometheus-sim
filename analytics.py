@@ -25,3 +25,7 @@ def logs_to_dataframe(personas):
     if frames:
         return pd.concat(frames, ignore_index=True)
     return pd.DataFrame()
+
+def compute_polarization(personas):
+    vals = [p.ideology for p in personas]
+    return max(vals) - min(vals) if vals else 0
