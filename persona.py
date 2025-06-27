@@ -2,13 +2,6 @@ import random
 import numpy as np
 from collections import deque, defaultdict
 
-EMOTIONS_BY_AGE = {
-    "child": ["scared", "curious", "confused", "happy", "sad", "bored"],
-    "teen": ["anxious", "excited", "indifferent", "angry", "hopeful", "bored"],
-    "adult": ["concerned", "hopeful", "cynical", "confident", "bored", "calm"],
-    "senior": ["nostalgic", "resigned", "hopeful", "concerned", "proud", "bored"]
-}
-
 PERSONALITY_TRAITS = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]
 
 def random_personality():
@@ -19,6 +12,13 @@ def age_bracket(age):
     if age < 20: return "teen"
     if age < 60: return "adult"
     return "senior"
+
+EMOTIONS_BY_AGE = {
+    "child": ["scared", "curious", "confused", "happy", "sad", "bored"],
+    "teen": ["anxious", "excited", "indifferent", "angry", "hopeful", "bored"],
+    "adult": ["concerned", "hopeful", "cynical", "confident", "bored", "calm"],
+    "senior": ["nostalgic", "resigned", "hopeful", "concerned", "proud", "bored"]
+}
 
 def get_emotion_for_event(age, valence, surprise):
     bracket = age_bracket(age)
@@ -36,20 +36,21 @@ def get_emotion_for_event(age, valence, surprise):
     return random.choice(emo_pool)
 
 class Persona:
-    def __init__(self, name, age, ideology=0.0, trust=0.5, personality=None):
+    def __init__(self, name, age, ideology=0.0, trust=0.5, personality=None, digital_literacy=None):
         self.name = name
         self.age = age
         self.ideology = ideology # -1 to +1, left to right
         self.trust = trust # 0 to 1
         self.emotion = "calm"
         self.personality = personality or random_personality()
+        self.digital_literacy = digital_literacy if digital_literacy is not None else np.clip(np.random.normal(0.5, 0.2), 0, 1)
         self.interests = self._default_interests()
-        self.memory = deque(maxlen=50)
+        self.memory = deque(maxlen=75)
         self.topic_exposure = defaultdict(int)
         self.log = []
-        self.habituation = 0.07 + (0.03 * (1 - self.personality["openness"]))
+        self.habituation = 0.06 + (0.04 * (1 - self.personality["openness"]))
         self.recovery_rate = 0.04 + (0.04 * self.personality["conscientiousness"])
-        self.susceptibility = 0.15 + (0.15 * (1 - self.personality["openness"]))
+        self.susceptibility = 0.14 + (0.13 * (1 - self.personality["openness"]))
         self.positivity = 0.5 + 0.3 * self.personality["agreeableness"]
         self.neuroticism = self.personality["neuroticism"]
 
@@ -62,41 +63,36 @@ class Persona:
             return ["news", "work", "technology", "health"]
         return ["health", "family", "history", "security"]
 
-    def react(self, headline, topic, valence, surprise, topic_bias=0.0):
-        # Habituation: less response after repeated exposure to a topic
+    def react(self, headline, topic, valence, surprise, topic_bias=0.0, peer_influence=0.0):
         exp = self.topic_exposure[topic]
-        habit_factor = max(0.25, 1 - exp * self.habituation)
+        habit_factor = max(0.2, 1 - exp * self.habituation)
+        interest_factor = 1.3 if topic in self.interests else 1.0
+        emotionality = 0.6 + 0.7 * self.neuroticism
 
-        # Personality, age, interests: amplify/dampen reactions
-        interest_factor = 1.25 if topic in self.interests else 1.0
-        emotionality = 0.6 + 0.8 * self.neuroticism
-
-        # Calculate emotional reaction
         net_valence = (valence * interest_factor * habit_factor) + (0.1 * topic_bias)
+        net_valence += peer_influence * 0.2
         surprise = min(max(surprise, 0), 1)
         self.emotion = get_emotion_for_event(self.age, net_valence, surprise)
 
-        # Adjust trust and ideology
+        # Trust logic
         prev_trust = self.trust
-        trust_shift = 0.02 * net_valence * emotionality
+        trust_shift = 0.025 * net_valence * emotionality
         if "misinfo" in headline.lower():
             trust_shift -= 0.07 * (1 - self.personality["conscientiousness"])
-        # Slight trust recovery if exposed to positive or calming news
         if net_valence > 0.2 and self.trust < 1:
-            trust_shift += 0.01 * self.positivity
-
+            trust_shift += 0.012 * self.positivity
         self.trust = np.clip(self.trust + trust_shift, 0, 1)
 
-        # Ideology only shifts if topic is political, and not every event
+        # Ideology logic
         if topic in ["politics", "world", "social"]:
-            drift = net_valence * 0.04 * (1 + self.personality["openness"]) * (1 - abs(self.ideology))
+            drift = net_valence * 0.05 * (1 + self.personality["openness"]) * (1 - abs(self.ideology))
             self.ideology = np.clip(self.ideology + drift, -1, 1)
 
-        # Habituation/memory update
+        # Memory
         self.memory.append((headline, topic, valence, net_valence, self.emotion, self.trust, self.ideology))
         self.topic_exposure[topic] += 1
 
-        # Log reaction
+        # Log
         self.log.append({
             "headline": headline,
             "topic": topic,
@@ -107,17 +103,17 @@ class Persona:
             "ideology": self.ideology,
             "exposure": self.topic_exposure[topic],
             "interest": topic in self.interests,
+            "peer_influence": peer_influence,
             "personality": self.personality.copy()
         })
 
     def recover(self):
-        # Emotional and ideological recovery toward baseline
         if self.emotion in ("scared", "anxious", "sad", "confused", "angry", "outraged"):
-            if random.random() < 0.65:
+            if random.random() < 0.75:
                 self.emotion = "calm"
         self.trust += (0.5 - self.trust) * self.recovery_rate
         self.trust = np.clip(self.trust, 0, 1)
-        self.ideology *= (1 - self.recovery_rate/2)
+        self.ideology *= (1 - self.recovery_rate / 2)
 
     def summary(self):
         return {
