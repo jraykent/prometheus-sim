@@ -2,7 +2,7 @@ import requests
 import random
 
 # NewsAPI and Reddit credentials here
-NEWSAPI_KEY = "YOUR_NEWSAPI_KEY"
+NEWSAPI_KEY = "5407bb8bb38b433b8f9973bf024e2f61"
 
 def fetch_newsapi_headlines(topic='general', max_results=10):
     url = f"https://newsapi.org/v2/top-headlines?category={topic}&language=en&pageSize={max_results}&apiKey={NEWSAPI_KEY}"
