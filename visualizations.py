@@ -24,19 +24,6 @@ def plot_trust(personas):
     plt.tight_layout()
     return plt
 
-def plot_emotions_over_time(personas):
-    plt.figure(figsize=(8, 4))
-    for p in personas:
-        if p.log:
-            emotions = [entry['emotion'] for entry in p.log]
-            plt.plot(emotions, label=p.name)
-    plt.xlabel("Event #")
-    plt.ylabel("Emotion")
-    plt.title("Emotion Over Time (raw, for debugging)")
-    plt.legend()
-    plt.tight_layout()
-    return plt
-
 def plot_emotion_distribution(personas):
     import collections
     emotion_counts = collections.Counter()
