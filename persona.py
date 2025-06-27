@@ -35,21 +35,28 @@ def get_emotion_for_event(age, valence, surprise):
         return "bored"
     return random.choice(emo_pool)
 
+def ideology_label(val):
+    if val <= -0.5: return "Liberal"
+    if val >= 0.5: return "Conservative"
+    return "Moderate"
+
 class Persona:
-    def __init__(self, name, age, ideology=0.0, trust=0.5, personality=None, digital_literacy=None):
+    def __init__(self, name, age, ideology=0.0, trust=0.5, region="Midwest", education="Bachelor", personality=None, digital_literacy=None):
         self.name = name
         self.age = age
-        self.ideology = ideology # -1 to +1, left to right
-        self.trust = trust # 0 to 1
+        self.region = region
+        self.education = education
+        self.ideology = ideology # -1 to +1
+        self.trust = trust
         self.emotion = "calm"
         self.personality = personality or random_personality()
         self.digital_literacy = digital_literacy if digital_literacy is not None else np.clip(np.random.normal(0.5, 0.2), 0, 1)
         self.interests = self._default_interests()
-        self.memory = deque(maxlen=75)
+        self.memory = deque(maxlen=100)
         self.topic_exposure = defaultdict(int)
         self.log = []
         self.habituation = 0.06 + (0.04 * (1 - self.personality["openness"]))
-        self.recovery_rate = 0.04 + (0.04 * self.personality["conscientiousness"])
+        self.recovery_rate = 0.03 + (0.05 * self.personality["conscientiousness"])
         self.susceptibility = 0.14 + (0.13 * (1 - self.personality["openness"]))
         self.positivity = 0.5 + 0.3 * self.personality["agreeableness"]
         self.neuroticism = self.personality["neuroticism"]
@@ -74,7 +81,7 @@ class Persona:
         surprise = min(max(surprise, 0), 1)
         self.emotion = get_emotion_for_event(self.age, net_valence, surprise)
 
-        # Trust logic
+        # Trust
         prev_trust = self.trust
         trust_shift = 0.025 * net_valence * emotionality
         if "misinfo" in headline.lower():
@@ -83,7 +90,7 @@ class Persona:
             trust_shift += 0.012 * self.positivity
         self.trust = np.clip(self.trust + trust_shift, 0, 1)
 
-        # Ideology logic
+        # Ideology
         if topic in ["politics", "world", "social"]:
             drift = net_valence * 0.05 * (1 + self.personality["openness"]) * (1 - abs(self.ideology))
             self.ideology = np.clip(self.ideology + drift, -1, 1)
@@ -101,8 +108,11 @@ class Persona:
             "emotion": self.emotion,
             "trust": self.trust,
             "ideology": self.ideology,
+            "ideology_label": ideology_label(self.ideology),
             "exposure": self.topic_exposure[topic],
             "interest": topic in self.interests,
+            "region": self.region,
+            "education": self.education,
             "peer_influence": peer_influence,
             "personality": self.personality.copy()
         })
@@ -119,7 +129,10 @@ class Persona:
         return {
             "name": self.name,
             "age": self.age,
+            "region": self.region,
+            "education": self.education,
             "ideology": round(self.ideology, 2),
+            "ideology_label": ideology_label(self.ideology),
             "trust": round(self.trust, 2),
             "emotion": self.emotion,
             "top_interest": max(self.topic_exposure, key=self.topic_exposure.get, default=None)
@@ -127,7 +140,7 @@ class Persona:
 
     def explain(self):
         mood = f"{self.name} ({self.age}) is feeling {self.emotion}."
-        trust = f"Trust: {self.trust:.2f} | Ideology: {self.ideology:.2f}."
+        trust = f"Trust: {self.trust:.2f} | Ideology: {self.ideology:.2f} ({ideology_label(self.ideology)})."
         dominant = f"Most exposed topic: {self.summary()['top_interest'] or 'N/A'}."
         return f"{mood} {trust} {dominant}"
 
