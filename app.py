@@ -1,35 +1,50 @@
 import streamlit as st
 from persona import Persona
-from news_ingest import get_sample_headlines, fetch_newsapi_headlines, fetch_reddit_headlines
+from news_ingest import get_all_headlines
 from simulation import run_simulation, run_blackbox
-from analytics import summarize_all, logs_to_dataframe
-from visualizations import plot_ideology_drift, plot_trust, plot_emotion_distribution
+from analytics import summarize_all, logs_to_dataframe, compute_polarization
+from visualizations import (
+    plot_ideology_drift,
+    plot_ideology_histogram,
+    plot_trust,
+    plot_emotion_distribution
+)
 from export_utils import export_persona_logs
+from admin_toolkit import admin_panel
 import random
+import schedule
+import time
 
+st.set_page_config(page_title="Prometheus Simulation", layout="wide")
+
+# --- Persona Creation ---
 @st.cache_resource
 def create_personas():
-    return [
-        Persona("Lily", 8),
-        Persona("Jordan", 16),
-        Persona("Alex", 34),
-        Persona("Pat", 52),
-        Persona("Morgan", 70)
+    demo_personas = [
+        Persona("Lily", 8, region="West", education="Elementary"),
+        Persona("Jordan", 16, region="Midwest", education="High School"),
+        Persona("Alex", 34, region="South", education="Bachelor"),
+        Persona("Pat", 52, region="Northeast", education="Master"),
+        Persona("Morgan", 70, region="Midwest", education="PhD"),
     ]
+    return demo_personas
 
 personas = create_personas()
 
-st.title("Prometheus: Generational AI Influence Simulation")
-
-# -- Headline source selection --
-st.sidebar.title("Headline Sources")
-headline_mode = st.sidebar.radio("Select source", ["Sample Demo", "NewsAPI", "Reddit"])
-if headline_mode == "Sample Demo":
-    headlines = get_sample_headlines()
-elif headline_mode == "NewsAPI":
-    headlines = fetch_newsapi_headlines() or get_sample_headlines()
-else:
-    headlines = fetch_reddit_headlines() or get_sample_headlines()
+# --- Sidebar Source Selection ---
+st.sidebar.title("Headline Source & Simulation Controls")
+selected_sources = st.sidebar.multiselect(
+    "Select data sources:",
+    ["newsapi", "reddit", "twitter", "tiktok", "demo"],
+    default=["newsapi", "reddit", "demo"]
+)
+topic = st.sidebar.text_input("Topic/query:", value="news")
+num_results = st.sidebar.slider("Max per source:", 5, 20, 10)
+headlines = get_all_headlines(
+    sources=selected_sources,
+    topic=topic,
+    max_results=num_results
+)
 
 headline = st.sidebar.selectbox(
     "Choose a headline/event",
@@ -40,7 +55,7 @@ headline_data = next(h for h in headlines if h[0] == headline)
 if st.sidebar.button("Simulate Event"):
     peer_ideologies = [p.ideology for p in personas]
     for idx, persona in enumerate(personas):
-        peer_mean = sum(peer_ideologies)/len(peer_ideologies)
+        peer_mean = sum(peer_ideologies) / len(peer_ideologies)
         peer_influence = (peer_mean - persona.ideology) * 0.2
         persona.react(*headline_data, peer_influence=peer_influence)
         persona.recover()
@@ -63,30 +78,52 @@ if st.sidebar.button("Reset (Clear Memory)"):
     st.cache_resource.clear()
     st.experimental_rerun()
 
-# -- Analytics & Visualization --
-if st.button("Show Persona Summaries"):
-    st.dataframe(summarize_all(personas))
+# --- Autonomous Scheduling (runs a sim cycle every N minutes) ---
+def scheduled_run():
+    run_simulation(personas, headlines, steps=1)
 
-if st.button("Show Raw Persona Logs Table"):
-    df = logs_to_dataframe(personas)
-    st.dataframe(df)
+if st.sidebar.checkbox("Enable Autonomous Mode (sim every 10 min)"):
+    st.info("Autonomous mode ON: Prometheus will run a step every 10 minutes (while app is open).")
+    schedule.every(10).minutes.do(scheduled_run)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
-if st.button("Visualize Ideology Drift"):
-    fig = plot_ideology_drift(personas)
-    st.pyplot(fig)
+# --- Analytics & Visualization ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("Show Persona Summaries"):
+        st.dataframe(summarize_all(personas))
 
-if st.button("Visualize Trust Levels"):
-    fig = plot_trust(personas)
-    st.pyplot(fig)
+    if st.button("Export Logs (CSV)"):
+        csv = export_persona_logs(personas, format="csv")
+        st.download_button("Download CSV", csv, "persona_logs.csv")
 
-if st.button("Show Emotion Distribution"):
-    fig = plot_emotion_distribution(personas)
-    st.pyplot(fig)
+with col2:
+    if st.button("Show Raw Persona Logs Table"):
+        df = logs_to_dataframe(personas)
+        st.dataframe(df)
+
+    if st.button("Show Political Spectrum Histogram"):
+        fig = plot_ideology_histogram(personas)
+        st.pyplot(fig)
+
+with col3:
+    if st.button("Visualize Ideology Drift"):
+        fig = plot_ideology_drift(personas)
+        st.pyplot(fig)
+    if st.button("Visualize Trust Levels"):
+        fig = plot_trust(personas)
+        st.pyplot(fig)
+    if st.button("Show Emotion Distribution"):
+        fig = plot_emotion_distribution(personas)
+        st.pyplot(fig)
 
 if st.button("Explain Personas"):
     for p in personas:
         st.write(p.explain())
 
 st.markdown("---")
-st.markdown("**Tip:** Use the sidebar for source/news selection and simulation. Use analytics buttons above to explore results and trends.")
+admin_panel(personas)
+st.markdown("**Tip:** Use the sidebar for live news/social source selection and simulation. Use analytics above to explore results. The Admin Toolkit is for advanced research/management.")
 
